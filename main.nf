@@ -72,9 +72,9 @@ process runBwa {
    samtools_version = "v_samtools.txt"
 
    """
-        samtools --version &> $samtools_version
-	bwa mem -M -t ${task.cpus} ${REF} $left $right | samtools sort -O BAM - > $bam
-	samtools stats $bam > $stats
+        /opt/samtools/1.9/bin/samtools --version &> $samtools_version
+	bwa mem -M -t ${task.cpus} ${REF} $left $right | /opt/samtools/1.9/bin/samtools sort -O BAM - > $bam
+	/opt/samtools/1.9/bin/samtools stats $bam > $stats
 	
    """
 
@@ -116,7 +116,7 @@ process extractUnmapped {
    right = sampleID + "_R2.fastq.gz"
 
    """
-	samtools fastq -f 4 -1 $left -2 $right $bam
+	/opt/samtools/1.9/bin/samtools fastq -f 4 -1 $left -2 $right $bam
    """
 
 }
