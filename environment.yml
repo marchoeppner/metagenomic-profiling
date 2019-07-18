@@ -12,5 +12,4 @@ dependencies:
  - fastp=0.20.0
  - kaiju=1.6.2
  - ruby=2.4.5
- - samtools=1.9
  - bwa=0.7.17
