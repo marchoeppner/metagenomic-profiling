@@ -11,5 +11,4 @@ dependencies:
  - kraken=0.10.5beta
  - fastp=0.20.0
  - kaiju=1.6.2
- - ruby=2.4.5
  - bwa=0.7.17

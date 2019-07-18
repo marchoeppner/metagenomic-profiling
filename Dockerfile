@@ -4,9 +4,10 @@ LABEL authors="Marc Hoeppner" \
 
 COPY environment.yml /
 RUN conda env create -f /environment.yml && conda clean -a
-RUN gem install thinreports
 ENV PATH /opt/conda/envs/metagenomics-profiling-1.0/bin:$PATH
-RUN apt-get update && apt-get -y install build-essential
+RUN apt-get update && \
+	apt-get -y install build-essential ruby-full && \
+	gem install thinreports
 RUN mkdir /opt/samtools && \
 	cd /opt/samtools && \
 	wget https://github.com/samtools/samtools/releases/download/1.9/samtools-1.9.tar.bz2 && \
