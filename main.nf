@@ -3,36 +3,17 @@
 OUTDIR = params.outdir 
 
 PATHOSCOPE_INDEX_DIR=file(params.pathoscope_index_dir)
-
 METAPHLAN_PKL=file(params.metaphlan_pkl)
 METAPHLAN_DB=params.metaphlan_db
-
 KAIJU_REPORT=file(params.kaiju_report)
 KAIJU_DB=params.kaiju_db
-
-
 ARIBA_DB=file(params.ariba_db)
-
 REF = file(params.ref)
-
 inputFile=file(params.samples)
-
-params.clip_r1 = 0
-params.clip_r2 = 0
-params.three_prime_clip_r1 = 0
-params.three_prime_clip_r2 = 0
-
-clip_r1 = params.clip_r1
-clip_r2 = params.clip_r2
-three_prime_clip_r1 = params.three_prime_clip_r1
-three_prime_clip_r2 = params.three_prime_clip_r2
-
 
 // Logging and reporting
 
-logParams(params, "nextflow_parameters.txt")
-
-params.version = "0.1" 
+params.version = "1.0" 
 // Header log info 
 
 log.info "=========================================" 
@@ -47,61 +28,26 @@ Channel.from(inputFile)
        	.splitCsv(sep: ';', header: true)
        	.set { inputTrimgalore }
 
-process runTrimgalore {
+process runFastp {
 
-   tag "${patientID}|${sampleID}"
-   publishDir "${OUTDIR}/${patientID}/${sampleID}/trimgalore", mode: 'copy',
-        saveAs: {filename ->
-            if (filename.indexOf("_fastqc") > 0) "FastQC/$filename"
-            else if (filename.indexOf("trimming_report.txt") > 0) "logs/$filename"
-            else params.saveTrimmed ? filename : null
-        }
+	tag "${indivID}|${sampleID}"
 
-   input:
-   set val(patientID),val(sampleID),val(sampleType),val(readType),val(platform),left,right from inputTrimgalore
+	input:
+	set set val(patientID),val(sampleID),val(sampleType),val(readType),val(platform), fastqR1, fastqR2 from inputFastp
 
-   output:
-   set val(patientID),val(sampleID),file("*val_1.fq.gz"),file("*val_2.fq.gz") into trimgaloreOutput
-   file "*trimming_report.txt" into trimgalore_results, trimgalore_logs 
-   file "*_fastqc.{zip,html}" into trimgalore_fastqc_reports
-   file "v_trimgalore.txt" into version_trimgalore
+	output:
+	set val(patientID),val(sampleID), file(left),file(right) into fastpOutput
+	set file(html),file(json) into fastp_results
 
-   script:
+	script:
+	left = file(fastqR1).getBaseName() + "_trimmed.fastq.gz"
+	right = file(fastqR2).getBaseName() + "_trimmed.fastq.gz"
+	json = file(fastqR1).getBaseName() + ".fastp.json"
+	html = file(fastqR1).getBaseName() + ".fastp.html"
 
-    c_r1 = clip_r1 > 0 ? "--clip_r1 ${clip_r1}" : ''
-    c_r2 = clip_r2 > 0 ? "--clip_r2 ${clip_r2}" : ''
-    tpc_r1 = three_prime_clip_r1 > 0 ? "--three_prime_clip_r1 ${three_prime_clip_r1}" : ''
-    tpc_r2 = three_prime_clip_r2 > 0 ? "--three_prime_clip_r2 ${three_prime_clip_r2}" : ''
-
-    """
-    trim_galore --paired --fastqc --length 35 --gzip $c_r1 $c_r2 $tpc_r1 $tpc_r2 $left $right
-    trim_galore --version &> v_trimgalore.txt
-    """
-
-}
-
-inputMerge = trimgaloreOutput.groupTuple(by: [0,1])
-
-process Merge {
-
-        tag "${patientID}|${sampleID}"
-
-        input:
-        set patientID,sampleID,forward_reads,reverse_reads from inputMerge
-
-        scratch true
-
-        output:
-        set patientID,sampleID,file(left_merged),file(right_merged) into inputPathoscopeMap,inputBwa
-
-        script:
-        left_merged = sampleID + "_R1.fastq.gz"
-        right_merged = sampleID + "_R2.fastq.gz"
-
-        """
-                zcat ${forward_reads.join(" ")} | gzip > $left_merged
-                zcat ${reverse_reads.join(" ")} | gzip > $right_merged
-        """
+	"""
+		fastp --in1 $fastqR1 --in2 $fastqR2 --out1 $left --out2 $right -w ${task.cpus} -j $json -h $html --length_required 35
+	"""
 }
 
 process runBwa {
@@ -134,6 +80,25 @@ process runBwa {
 
 }
 
+inputMerge = alignedBam.groupTuple(by: [0,1])
+
+process runMergeBam {
+
+   input:
+   set patientID,sampleID,file(bams) from inputMerge
+
+   output:
+   set patientID,sampleID,file(merged_bam) into mergedBam
+
+   script:
+   merged_bam = patientID + "_" + sampleID + ".merged.bam"
+   
+   """
+	samtools merge $merged_bam $bams
+   """
+
+}
+
 // We extract the reads not mapping to the host genome
 process extractUnmapped {
 
@@ -141,7 +106,7 @@ process extractUnmapped {
    publishDir "${OUTDIR}/${patientID}/${sampleID}/Host", mode: 'copy'
 
    input:
-   set patientID,sampleID,file(bam) from alignedBam
+   set patientID,sampleID,file(bam) from mergedBam
 
    output:
    set patientID,sampleID,file(left),file(right) into inputMetaphlan,inputKaiju,inputAriba
