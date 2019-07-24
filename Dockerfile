@@ -7,7 +7,7 @@ RUN conda env create -f /environment.yml && conda clean -a
 ENV PATH /opt/conda/envs/metagenomics-profiling-1.0/bin:$PATH
 RUN apt-get update && \
 	apt-get -y install build-essential ruby-full openssl libncurses5-dev zlib1g-dev xz-utils curl libcurl4-gnutls-dev bzip2 libbz2-dev ca-certificates \ 
-	libssl1.0.0 libssl-dev && \
+	libssl-dev && \
 	gem install thinreports
 RUN mkdir /opt/samtools && \
 	cd /opt/samtools && \
