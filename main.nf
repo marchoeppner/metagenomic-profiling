@@ -94,7 +94,7 @@ process runMergeBam {
    merged_bam = patientID + "_" + sampleID + ".merged.bam"
    
    """
-	samtools merge $merged_bam $bams
+	/opt/samtools/1.9/bin/samtools merge $merged_bam $bams
    """
 
 }
