@@ -2,23 +2,69 @@
 
 OUTDIR = params.outdir 
 
-METAPHLAN_PKL=file(params.metaphlan_pkl)
-METAPHLAN_DB=params.metaphlan_db
-REF = file(params.ref)
+def helpMessage() {
+  log.info"""
+  =================================================================
+   IKMB | Metaphlan2 Pipeline | v${workflow.manifest.version}
+  =================================================================
+  Usage:
+  The typical command for running the pipeline is as follows:
+  nextflow run marchoeppner/metagenomic-profile --reads '/path/to/*_R{1,2}_001.fastq.gz' 
+  Mandatory arguments:
+  --reads 	The path to the folder containing PE metagenomic reads (1 per sample)
+  --ref		The path to the reference genome (must be accompanied by a BWA index!)
 
-inputFile=file(params.samples)
+  Optonal arguments:
+  --email 	An eMail adress to which reports are sent
+  -profile      The nextflow execution profile to use
+
+  """.stripIndent()
+}
+
+// Show help message
+if (params.help){
+	helpMessage()
+	exit 0
+}
+
+// sanity checks 
+
+if (params.metaphlan_pkl) {
+	METAPHLAN_PKL=file(params.metaphlan_pkl)
+	if (!METAPHLAN_PKL.exists()) exit 1; "Could not find the Metaphlan PKL file - please check the path"
+} else {
+	exit 1; "No Metaphlan PKL file was specified, aborting..."
+}
+
+if (params.metaphlan_db) {
+	METAPHLAN_DB=params.metaphlan_db
+	db_path = file(METAPHLAN_DB)
+	if (!db_path.exists()) exit 1; "Could not find your Metaphlan DB - please check the path"
+} else {
+	exit 1; "No Metaphlan database was specified, aborting..."
+}
+
+if (params.ref) {
+	REF = file(params.ref)
+	index_file = file(params.ref + "bt2")
+	if (!REF.exists()) exit 1; "Could not find the specified reference genome - please check the path"
+	if  (!index_file.exists()) exit 1; "Found genome reference, but seems to be missing the BWA index files"
+} else {
+	exit 1; "Must provide the path to a refrence genome and BWA index"
+}
 
 // Logging and reporting
 
-params.version = "1.0" 
+params.version = workflow.manifest.version
+
 // Header log info 
 
 log.info "=========================================" 
+log.info "METAPHLAN2 P I P E L I N E"
 log.info "IKMB pipeline version v${params.version}" 
 log.info "Nextflow Version: $workflow.nextflow.version" 
 log.info "Command Line: $workflow.commandLine" 
 log.info "=========================================" 
-
 
 // Starting the workflow
 
@@ -28,7 +74,7 @@ Channel.fromFilePairs(params.reads)
 
 process runFastp {
 
-	tag "${indivID}|${sampleID}"
+	publishDir "${OUTDIR}/${sampleID}/fastp"
 
 	input:
 	set val(sampleID), fastqR1, fastqR2 from inputFastp
@@ -50,8 +96,7 @@ process runFastp {
 
 process runBwa {
 
-   tag "${patientID}|${sampleID}"
-   publishDir "${OUTDIR}/${patientID}/${sampleID}/Host", mode: 'copy'
+   publishDir "${OUTDIR}/${sampleID}/Host", mode: 'copy'
 
    input:
    set sampleID,file(left),file(right) from inputBwa
@@ -64,14 +109,14 @@ process runBwa {
 
    script:
 
-   bam = sampleID + ".bam"
+   bam = sampleID + ".host_mapped.bam"
    stats = sampleID + "_bwa_stats.txt"
 
    samtools_version = "v_samtools.txt"
 
    """
         samtools --version &> $samtools_version
-	bwa mem -M -t ${task.cpus} ${REF} $left $right | /opt/samtools/1.9/bin/samtools sort -O BAM - > $bam
+	bwa mem -M -t ${task.cpus} ${REF} $left $right | samtools sort -m 4G -O BAM - > $bam
 	samtools stats $bam > $stats
 	
    """
@@ -100,8 +145,7 @@ process runMergeBam {
 // We extract the reads not mapping to the host genome
 process extractUnmapped {
 
-   tag "${patientID}|${sampleID}"
-   publishDir "${OUTDIR}/${patientID}/${sampleID}/Host", mode: 'copy'
+   publishDir "${OUTDIR}/${sampleID}/Host", mode: 'copy'
 
    input:
    set sampleID,file(bam) from mergedBam
@@ -121,8 +165,7 @@ process extractUnmapped {
 
 process runMetaphlan {
 
-   tag "${patientID}|${sampleID}"
-   publishDir "${OUTDIR}/${patientID}/${sampleID}/Metaphlan2", mode: 'copy'
+   publishDir "${OUTDIR}/${sampleID}/Metaphlan2", mode: 'copy'
 
    input:
    set sampleID,file(left_reads),file(right_reads) from inputMetaphlan
@@ -145,6 +188,8 @@ process runMetaphlan {
 
 process runMergeAbundance {
 
+	publishDir "${OUTDIR}/${sampleID}/Metaphlan2", mode: 'copy'
+
 	input:
 	file(results) from outputMetaphlan.collect()
 
@@ -161,6 +206,7 @@ process runMergeAbundance {
 
 process runBuildHeatmap {
 
+	publishDir "${OUTDIR}/${sampleID}/Metaphlan2", mode: 'copy'
 
 	input:
 	file(abundance) from abundanceMetaphlan

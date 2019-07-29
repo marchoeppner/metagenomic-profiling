@@ -1,5 +1,5 @@
 Bootstrap:docker
-From:continuumio/anaconda
+From:nfcore/base
 
 %labels
     MAINTAINER Marc Hoeppner <m.hoeppner@ikmb.uni-kiel.de>
@@ -17,7 +17,6 @@ From:continuumio/anaconda
 
     /opt/conda/bin/conda env create -f /environment.yml
     /opt/conda/bin/conda clean -a
-    gem install thinreports
     mkdir -p /ifs
     apt-get -y install procps
 
