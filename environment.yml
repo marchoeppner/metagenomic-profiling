@@ -6,9 +6,9 @@ channels:
  - conda-forge
  - bioconda
 dependencies:
- - pathoscope=2.0.6
  - metaphlan2=2.7.7
- - kraken=0.10.5beta
  - fastp=0.20.0
- - kaiju=1.6.2
  - bwa=0.7.17
+ - multiqc=1.7
+ - samtools=1.9
+ - hclust2=0.99

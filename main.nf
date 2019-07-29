@@ -2,13 +2,10 @@
 
 OUTDIR = params.outdir 
 
-PATHOSCOPE_INDEX_DIR=file(params.pathoscope_index_dir)
 METAPHLAN_PKL=file(params.metaphlan_pkl)
 METAPHLAN_DB=params.metaphlan_db
-KAIJU_REPORT=file(params.kaiju_report)
-KAIJU_DB=params.kaiju_db
-ARIBA_DB=file(params.ariba_db)
 REF = file(params.ref)
+
 inputFile=file(params.samples)
 
 // Logging and reporting
@@ -24,19 +21,20 @@ log.info "========================================="
 
 
 // Starting the workflow
-Channel.from(inputFile)
-       	.splitCsv(sep: ';', header: true)
-       	.set { inputTrimgalore }
+
+Channel.fromFilePairs(params.reads)
+	.ifEmpty {exit 1; "Could not find the specified input reads $params.reads"}
+	.set { inputFastp }
 
 process runFastp {
 
 	tag "${indivID}|${sampleID}"
 
 	input:
-	set set val(patientID),val(sampleID),val(sampleType),val(readType),val(platform), fastqR1, fastqR2 from inputFastp
+	set val(sampleID), fastqR1, fastqR2 from inputFastp
 
 	output:
-	set val(patientID),val(sampleID), file(left),file(right) into fastpOutput
+	set val(sampleID), file(left),file(right) into fastpOutput
 	set file(html),file(json) into fastp_results
 
 	script:
@@ -56,10 +54,10 @@ process runBwa {
    publishDir "${OUTDIR}/${patientID}/${sampleID}/Host", mode: 'copy'
 
    input:
-   set patientID,sampleID,file(left),file(right) from inputBwa
+   set sampleID,file(left),file(right) from inputBwa
 
    output:
-   set patientID,sampleID,file(bam) into alignedBam
+   set sampleID,file(bam) into alignedBam
    file(stats) into BamStats
 
    file(samtools_version) into version_samtools
@@ -72,9 +70,9 @@ process runBwa {
    samtools_version = "v_samtools.txt"
 
    """
-        /opt/samtools/1.9/bin/samtools --version &> $samtools_version
+        samtools --version &> $samtools_version
 	bwa mem -M -t ${task.cpus} ${REF} $left $right | /opt/samtools/1.9/bin/samtools sort -O BAM - > $bam
-	/opt/samtools/1.9/bin/samtools stats $bam > $stats
+	samtools stats $bam > $stats
 	
    """
 
@@ -85,16 +83,16 @@ inputMerge = alignedBam.groupTuple(by: [0,1])
 process runMergeBam {
 
    input:
-   set patientID,sampleID,file(bams) from inputMerge
+   set sampleID,file(bams) from inputMerge
 
    output:
-   set patientID,sampleID,file(merged_bam) into mergedBam
+   set sampleID,file(merged_bam) into mergedBam
 
    script:
    merged_bam = patientID + "_" + sampleID + ".merged.bam"
    
    """
-	/opt/samtools/1.9/bin/samtools merge $merged_bam $bams
+	samtools merge $merged_bam $bams
    """
 
 }
@@ -106,83 +104,17 @@ process extractUnmapped {
    publishDir "${OUTDIR}/${patientID}/${sampleID}/Host", mode: 'copy'
 
    input:
-   set patientID,sampleID,file(bam) from mergedBam
+   set sampleID,file(bam) from mergedBam
 
    output:
-   set patientID,sampleID,file(left),file(right) into inputMetaphlan,inputKaiju,inputAriba
+   set sampleID,file(left),file(right) into inputMetaphlan
   
    script:
    left = sampleID + "_R1.fastq.gz"
    right = sampleID + "_R2.fastq.gz"
 
    """
-	/opt/samtools/1.9/bin/samtools fastq -f 4 -1 $left -2 $right $bam
-   """
-
-}
-
-process runAriba {
-
-   tag "${patientID}|${sampleID}"
-   publishDir "${OUTDIR}/${patientID}/${sampleID}/Ariba", mode: 'copy'
-
-   input:
-   set patientID,sampleID,file(left),file(right) from inputAriba
-
-   output:
-   file(report) into AribaReport
-
-   script:
-
-   report = sampleID + "_report.txt"
-
-   """
-        ariba run $ARIBA_DB $left $right out.${sampleID}.run && cp out.${sampleID}.run/report.tsv report.${sampleID}.tsv
-   """  
-
-}
-
-process runPathoscopeMap {
-
-   tag "${patientID}|${sampleID}"
-   publishDir "${OUTDIR}/${patientID}/${sampleID}/Pathoscope", mode: 'copy'
-
-   input:
-   set patientID,sampleID,file(left_reads),file(right_reads) from inputPathoscopeMap
-
-   output:
-   set patientID,sampleID,file(pathoscope_sam) into inputPathoscopeId
-   file "v_pathoscope.txt" into version_pathoscope
-
-   script:
-   pathoscope_sam = sampleID + ".sam"
-
-   """
-	pathoscope MAP -1 $left_reads -2 $right_reads -indexDir $PATHOSCOPE_INDEX_DIR -filterIndexPrefixes hg19_rRNA \
-	-targetIndexPrefix A-Lbacteria.fa,M-Zbacteria.fa,virus.fa -outAlign $pathoscope_sam -expTag $sampleID -numThreads 8
-	pathoscope --version &> v_pathoscope.txt
-   """
-
-}
-
-process runPathoscopeId {
-
-   tag "${patientID}|${sampleID}"
-   publishDir "${OUTDIR}/${patientID}/${sampleID}/Pathoscope", mode: 'copy'
-
-   input:
-   set patientID,sampleID,file(samfile) from inputPathoscopeId
-
-   output:
-   set patientID,sampleID,file(pathoscope_tsv) into outputPathoscopeId
-
-   script:
-
-   //pathoscope_sam = "updated_" + samfile
-   pathoscope_tsv = sampleID + "-sam-report.tsv"
-
-   """
-	pathoscope ID -alignFile $samfile -fileType sam -expTag $sampleID
+	samtools fastq -f 4 -1 $left -2 $right $bam
    """
 
 }
@@ -193,7 +125,7 @@ process runMetaphlan {
    publishDir "${OUTDIR}/${patientID}/${sampleID}/Metaphlan2", mode: 'copy'
 
    input:
-   set patientID,sampleID,file(left_reads),file(right_reads) from inputMetaphlan
+   set sampleID,file(left_reads),file(right_reads) from inputMetaphlan
 
    output:
    file(metaphlan_out) into outputMetaphlan
@@ -211,83 +143,47 @@ process runMetaphlan {
 
 }
 
-process runKaiju {
-
-   tag "${patientID}|${sampleID}"
-
-   input:
-   set patientID,sampleID,file(left_reads),file(right_reads) from inputKaiju
-
-   output:
-   set patientID,sampleID,file(kaiju_out) into inputKaijuReport
-
-   script:
-
-   kaiju_out = sampleID + "_kaiju.out"
-
-   """
-	kaiju -z 16 -t $KAIJU_DB/nodes.dmp -f $KAIJU_DB/kaiju_db.fmi -i <(gunzip -c $left_reads) -j <(gunzip -c $right_reads) -o $kaiju_out
-   """
-
-
-}
-
-process runKaijuReport {
-
-   tag "${patientID}|${sampleID}"
-   publishDir "${OUTDIR}/${patientID}/${sampleID}/Kaiju", mode: 'copy'
-
-   input:
-   set patientID,sampleID,file(kaiju_out) from inputKaijuReport
-
-   output:
-   file(kaiju_report) into outputKaijuReport
-
-   script:
-   kaiju_report = sampleID + "_kaiju_report.txt"
-
-   """
-	kaijuReport -t $KAIJU_DB/nodes.dmp -n $KAIJU_DB/names.dmp -i $kaiju_out -r species -o $kaiju_report
-   """
-
-   
-}
-
-process makeReport {
-
-	tag "Generating Report|${patientID}|${sampleID}"
-	publishDir "${OUTDIR}/Reports"
+process runMergeAbundance {
 
 	input:
-	set patientID,sampleID,pathoscope from outputPathoscopeId
-	file(kaiju) from outputKaijuReport
-	file(metaphlan) from outputMetaphlan
-	file(ariba) from AribaReport
-	file(bwa) from BamStats
+	file(results) from outputMetaphlan.collect()
 
 	output:
-	file(report) into Report
+	file(abundances) into abundanceMetaphlan
 
 	script:
-	
-	json = patientID + "_" + sampleID + ".json"
-	report = patientID + "_" + sampleID + ".pdf"
+	abundances = "metaphlan_abundances.txt"
 
 	"""
-		cp $baseDir/assets/*.tlf . 
-		ruby $baseDir/bin/pipeline2json.rb \
-			--ariba $ariba \
-			--metaphlan $metaphlan \
-			--pathoscope $pathoscope \
-			--kaiju $kaiju \
-			--patient_id $patientID \
-			--sample_id $sampleID \
-			--samplesheet $inputFile \
-			--bam-stats $bwa \
-			-o $json
-		ruby $baseDir/bin/json2report.rb -i $json -o $report
+		merge_metaphlan_tables.py ${results.join(" ")} > $abundances
 	"""
+}
 
+process runBuildHeatmap {
+
+
+	input:
+	file(abundance) from abundanceMetaphlan
+
+	output:
+	file(heatmap) into outputHeatmap
+
+	script:
+	heatmap = "metaphlan.abundances.png"
+
+	"""
+		grep -E "(s__)|(^ID)" $abundance | grep -v "t__" | sed 's/^.*s__//g' > merged_abundance_table_species.txt
+		hclust2.py -i merged_abundance_table_species.txt -o $heatmap --ftop 25 \
+			--f_dist_f braycurtis \
+			--s_dist_f braycurtis \
+			--cell_aspect_ratio 0.5 \
+			-l --flabel_size 6 \
+			--slabel_size 6 \
+			--max_flabel_len 100 \
+			--max_slabel_len 100 \
+			--minv 0.1 \
+			--dpi 300
+	"""
 }
 
 process runMultiQCFastq {
@@ -313,30 +209,3 @@ workflow.onComplete {
   log.info "Duration:		$workflow.duration"
   log.info "========================================="
 }
-
-
-
-
-//#############################################################################################################
-//#############################################################################################################
-//
-// FUNCTIONS
-//
-//#############################################################################################################
-//#############################################################################################################
-
-
-// ------------------------------------------------------------------------------------------------------------
-//
-// Read input file and save it into list of lists
-//
-// ------------------------------------------------------------------------------------------------------------
-def logParams(p, n) {
-  File file = new File(n)
-  file.write "Parameter:\tValue\n"
-
-  for(s in p) {
-     file << "${s.key}:\t${s.value}\n"
-  }
-}
-
