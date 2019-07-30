@@ -12,9 +12,10 @@ def helpMessage() {
   nextflow run marchoeppner/metagenomic-profile --reads '/path/to/*_R{1,2}_001.fastq.gz' 
   Mandatory arguments:
   --reads 	The path to the folder containing PE metagenomic reads (1 per sample)
-  --ref		The path to the reference genome (must be accompanied by a BWA index!)
 
   Optonal arguments:
+  --ref         The path to the reference genome for mapping stats (must be accompanied by a BWA index!)
+  --genome	Instead of --ref, use a pre-configured genome sequence by its common name (only RZCluster)
   --email 	An eMail adress to which reports are sent
   -profile      The nextflow execution profile to use
 
@@ -31,26 +32,37 @@ if (params.help){
 
 if (params.metaphlan_pkl) {
 	METAPHLAN_PKL=file(params.metaphlan_pkl)
-	if (!METAPHLAN_PKL.exists()) exit 1; "Could not find the Metaphlan PKL file - please check the path"
+	if (!METAPHLAN_PKL.exists()) exit 1, "Could not find the Metaphlan PKL file - please check the path"
 } else {
-	exit 1; "No Metaphlan PKL file was specified, aborting..."
+	exit 1, "No Metaphlan PKL file was specified, aborting..."
 }
 
 if (params.metaphlan_db) {
 	METAPHLAN_DB=params.metaphlan_db
 	db_path = file(METAPHLAN_DB)
-	if (!db_path.exists()) exit 1; "Could not find your Metaphlan DB - please check the path"
+	if (!db_path.exists()) exit 1, "Could not find your Metaphlan DB - please check the path"
 } else {
-	exit 1; "No Metaphlan database was specified, aborting..."
+	exit 1, "No Metaphlan database was specified, aborting..."
+}
+
+if (params.genome) {
+	if (!params.genomes) {
+		exit 1, "Specified a genome name for host mapping, but no genomes are configured for your profile...exiting."
+	} else if (!params.genomes.containsKey(params.genome) {
+		exit 1, "Specified unknown name for the host genome...valid options are: ${params.genomes.keySet()}"
+	}
 }
 
 if (params.ref) {
 	REF = file(params.ref)
-	index_file = file(params.ref + "bt2")
-	if (!REF.exists()) exit 1; "Could not find the specified reference genome - please check the path"
-	if  (!index_file.exists()) exit 1; "Found genome reference, but seems to be missing the BWA index files"
+	index_file = file(params.ref + ".bwt")
+	if (!REF.exists()) exit 1, "Could not find the specified reference genome - please check the path"
+	if  (!index_file.exists()) exit 1, "Found genome reference, but seems to be missing the BWA index files"
+} else if (params.genome) {
+	REF = params.genomes[ params.genome]
+        if (!REF.exists()) exit 1, "Could not find the specified reference genome - please check the path"
 } else {
-	exit 1; "Must provide the path to a refrence genome and BWA index"
+	exit 1, "Must provide the path to a refrence genome and BWA index"
 }
 
 // Logging and reporting
@@ -69,7 +81,7 @@ log.info "========================================="
 // Starting the workflow
 
 Channel.fromFilePairs(params.reads)
-	.ifEmpty {exit 1; "Could not find the specified input reads $params.reads"}
+	.ifEmpty {exit 1, "Could not find the specified input reads $params.reads"}
 	.set { inputFastp }
 
 process runFastp {
@@ -77,90 +89,51 @@ process runFastp {
 	publishDir "${OUTDIR}/${sampleID}/fastp"
 
 	input:
-	set val(sampleID), fastqR1, fastqR2 from inputFastp
+	set val(sampleID), file(reads) from inputFastp
 
 	output:
-	set val(sampleID), file(left),file(right) into fastpOutput
+	set val(sampleID), file(left),file(right) into inputBwa,inputMetaphlan
 	set file(html),file(json) into fastp_results
 
 	script:
-	left = file(fastqR1).getBaseName() + "_trimmed.fastq.gz"
-	right = file(fastqR2).getBaseName() + "_trimmed.fastq.gz"
-	json = file(fastqR1).getBaseName() + ".fastp.json"
-	html = file(fastqR1).getBaseName() + ".fastp.html"
+	left = reads[0].getBaseName() + "_trimmed.fastq.gz"
+	right = reads[1].getBaseName() + "_trimmed.fastq.gz"
+	json = reads[0].getBaseName() + ".fastp.json"
+	html = reads[0].getBaseName() + ".fastp.html"
 
 	"""
-		fastp --in1 $fastqR1 --in2 $fastqR2 --out1 $left --out2 $right -w ${task.cpus} -j $json -h $html --length_required 35
+		fastp --in1 ${reads[0]} --in2 ${reads[1]} --out1 $left --out2 $right -w ${task.cpus} -j $json -h $html --length_required 35
 	"""
 }
 
-process runBwa {
+if (params.ref) {
+	process runBwa {
 
-   publishDir "${OUTDIR}/${sampleID}/Host", mode: 'copy'
+	   publishDir "${OUTDIR}/${sampleID}/Host", mode: 'copy'
 
-   input:
-   set sampleID,file(left),file(right) from inputBwa
+	   input:
+	   set sampleID,file(left),file(right) from inputBwa
 
-   output:
-   set sampleID,file(bam) into alignedBam
-   file(stats) into BamStats
+	   output:
+	   set sampleID,file(bam) into alignedBam
+	   file(stats) into BamStats
 
-   file(samtools_version) into version_samtools
+	   file(samtools_version) into version_samtools
 
-   script:
+	   script:
 
-   bam = sampleID + ".host_mapped.bam"
-   stats = sampleID + "_bwa_stats.txt"
+	   bam = sampleID + ".host_mapped.bam"
+	   stats = sampleID + "_bwa_stats.txt"
 
-   samtools_version = "v_samtools.txt"
+	   samtools_version = "v_samtools.txt"
 
-   """
-        samtools --version &> $samtools_version
-	bwa mem -M -t ${task.cpus} ${REF} $left $right | samtools sort -m 4G -O BAM - > $bam
-	samtools stats $bam > $stats
+	   """
+        	samtools --version &> $samtools_version
+		bwa mem -M -t ${task.cpus} ${REF} $left $right | samtools sort -m 4G -O BAM - > $bam
+		samtools stats $bam > $stats
 	
-   """
-
-}
-
-inputMerge = alignedBam.groupTuple(by: [0,1])
-
-process runMergeBam {
-
-   input:
-   set sampleID,file(bams) from inputMerge
-
-   output:
-   set sampleID,file(merged_bam) into mergedBam
-
-   script:
-   merged_bam = patientID + "_" + sampleID + ".merged.bam"
-   
-   """
-	samtools merge $merged_bam $bams
-   """
-
-}
-
-// We extract the reads not mapping to the host genome
-process extractUnmapped {
-
-   publishDir "${OUTDIR}/${sampleID}/Host", mode: 'copy'
-
-   input:
-   set sampleID,file(bam) from mergedBam
-
-   output:
-   set sampleID,file(left),file(right) into inputMetaphlan
-  
-   script:
-   left = sampleID + "_R1.fastq.gz"
-   right = sampleID + "_R2.fastq.gz"
-
-   """
-	samtools fastq -f 4 -1 $left -2 $right $bam
-   """
-
+	   """
+	}
 }
 
 process runMetaphlan {
@@ -176,7 +149,7 @@ process runMetaphlan {
 
    script:
 
-   metaphlan_out = sampleID + "_metaphlan_report.txt"
+   metaphlan_out = sampleID + ".out"
 
    """
      metaphlan2.py --version &> v_metaphlan.txt
@@ -188,7 +161,7 @@ process runMetaphlan {
 
 process runMergeAbundance {
 
-	publishDir "${OUTDIR}/${sampleID}/Metaphlan2", mode: 'copy'
+	publishDir "${OUTDIR}/Metaphlan2", mode: 'copy'
 
 	input:
 	file(results) from outputMetaphlan.collect()
@@ -206,7 +179,7 @@ process runMergeAbundance {
 
 process runBuildHeatmap {
 
-	publishDir "${OUTDIR}/${sampleID}/Metaphlan2", mode: 'copy'
+	publishDir "${OUTDIR}/Metaphlan2", mode: 'copy'
 
 	input:
 	file(abundance) from abundanceMetaphlan
@@ -238,7 +211,7 @@ process runMultiQCFastq {
     publishDir "${OUTDIR}/Summary/Fastqc", mode: 'copy'
 
     input:
-    file('*') from trimgalore_fastqc_reports.flatten().toList()
+    file('*') from fastp_results.flatten().toList()
 
     output:
     file("fastq_multiqc*") into runMultiQCFastqOutput
@@ -246,7 +219,7 @@ process runMultiQCFastq {
     script:
 
     """
-    multiqc -n fastq_multiqc *.zip *.html
+    multiqc -n fastq_multiqc *.json *.html
     """
 }
 
