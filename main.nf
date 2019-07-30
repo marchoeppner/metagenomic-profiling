@@ -114,7 +114,7 @@ process runFastp {
 	"""
 }
 
-if (params.ref) {
+if ( REF ) {
 	process runBwa {
 
 	   publishDir "${OUTDIR}/${sampleID}/Host", mode: 'copy'
@@ -175,7 +175,7 @@ process runMergeAbundance {
 	file(results) from outputMetaphlan.collect()
 
 	output:
-	file(abundances) into inputHeatmap, inputGraphlan
+	file(abundances) into (inputHeatmap, inputGraphlan)
 
 	script:
 	abundances = "metaphlan_abundances.txt"
@@ -193,7 +193,7 @@ process runGraphlan {
 	file(abundances) from inputGraphlan
 
 	output:
-	set file(phylo_png),file(phylo_xml),file(phylo_annot),file(phylo_legend) into outputGraphlan
+	set file(pyhlo_png),file(phylo_xml),file(phylo_annot),file(phylo_legend) into outputGraphlan
 
 	script:
 	pyhlo_png = "metaphlan.phylogeny.png"
@@ -213,9 +213,9 @@ process runGraphlan {
 			--external_annotations 7 \
 			--min_clade_size 1
 
-		 graphlan_annotate.py --annot merged_abundance.annot.txt merged_abundance.tree.txt $phylo_xml
+		graphlan_annotate.py --annot merged_abundance.annot.txt merged_abundance.tree.txt $phylo_xml
 
-		graphlan.py --dpi ${params.dpi}  $phylo_xml $phylo_png --external_legends
+		graphlan.py --dpi ${params.dpi}  $phylo_xml $pyhlo_png --external_legends
 	"""
 
 }
