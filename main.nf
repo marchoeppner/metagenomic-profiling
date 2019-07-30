@@ -187,17 +187,19 @@ process runMergeAbundance {
 
 process runGraphlan {
 
-	publishDir "${OUTDIR}/Metaphlan2", mode: 'copy'
+	publishDir "${OUTDIR}/Metaphlan2/Phylogeny", mode: 'copy'
 	
 	input:
 	file(abundances) from inputGraphlan
 
 	output:
-	set file(phylo_png),file(phylo_xml) into outputGraphlan
+	set file(phylo_png),file(phylo_xml),file(phylo_annot),file(phylo_legend) into outputGraphlan
 
 	script:
 	pyhlo_png = "metaphlan.phylogeny.png"
 	phylo_xml = "metaphlan.phylogeny.xml"
+	phylo_annot = "metaphlan.phylogeny_annot.png"
+	phylo_legend = "metaphlan.phylogeny_legend.png"
 
 	"""
 		export2graphlan.py --skip_rows 1,2 \
@@ -213,14 +215,14 @@ process runGraphlan {
 
 		 graphlan_annotate.py --annot merged_abundance.annot.txt merged_abundance.tree.txt $phylo_xml
 
-		graphlan.py --dpi 300 $phylo_xml $phylo_png --external_legends
+		graphlan.py --dpi ${params.dpi}  $phylo_xml $phylo_png --external_legends
 	"""
 
 }
 
 process runBuildHeatmap {
 
-	publishDir "${OUTDIR}/Metaphlan2", mode: 'copy'
+	publishDir "${OUTDIR}/Metaphlan2/Heatmap", mode: 'copy'
 
 	input:
 	file(abundance) from inputHeatmap
@@ -242,26 +244,8 @@ process runBuildHeatmap {
 			--max_flabel_len 100 \
 			--max_slabel_len 100 \
 			--minv 0.1 \
-			--dpi 300
+			--dpi ${params.dpi}
 	"""
-}
-
-process runMultiQCFastq {
-
-    tag "Generating fastq level summary and QC plots"
-    publishDir "${OUTDIR}/Summary/Fastqc", mode: 'copy'
-
-    input:
-    file('*') from fastp_results.flatten().toList()
-
-    output:
-    file("fastq_multiqc*") into runMultiQCFastqOutput
-
-    script:
-
-    """
-    multiqc -n fastq_multiqc *.json *.html
-    """
 }
 
 workflow.onComplete {
