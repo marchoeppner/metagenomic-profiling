@@ -48,7 +48,7 @@ if (params.metaphlan_db) {
 if (params.genome) {
 	if (!params.genomes) {
 		exit 1, "Specified a genome name for host mapping, but no genomes are configured for your profile...exiting."
-	} else if (!params.genomes.containsKey(params.genome) {
+	} else if (!params.genomes.containsKey(params.genome)) {
 		exit 1, "Specified unknown name for the host genome...valid options are: ${params.genomes.keySet()}"
 	}
 }
@@ -59,7 +59,7 @@ if (params.ref) {
 	if (!REF.exists()) exit 1, "Could not find the specified reference genome - please check the path"
 	if  (!index_file.exists()) exit 1, "Found genome reference, but seems to be missing the BWA index files"
 } else if (params.genome) {
-	REF = params.genomes[ params.genome]
+	REF = file(params.genomes[ params.genome])
         if (!REF.exists()) exit 1, "Could not find the specified reference genome - please check the path"
 } else {
 	exit 1, "Must provide the path to a refrence genome and BWA index"
@@ -76,6 +76,14 @@ log.info "METAPHLAN2 P I P E L I N E"
 log.info "IKMB pipeline version v${params.version}" 
 log.info "Nextflow Version: $workflow.nextflow.version" 
 log.info "Command Line: $workflow.commandLine" 
+if (params.genome) {
+	log.info "Host genome: ${params.genome}"
+} else if (params.ref) {
+	log.info "Host genome: ${params.ref}"
+}
+if (workflow.containerEngine) {
+	log.info "Container Engine: ${workflow.containerEngine}"
+}
 log.info "=========================================" 
 
 // Starting the workflow
