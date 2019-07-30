@@ -175,7 +175,7 @@ process runMergeAbundance {
 	file(results) from outputMetaphlan.collect()
 
 	output:
-	file(abundances) into abundanceMetaphlan
+	file(abundances) into inputHeatmap, inputGraphlan
 
 	script:
 	abundances = "metaphlan_abundances.txt"
@@ -185,12 +185,45 @@ process runMergeAbundance {
 	"""
 }
 
+process runGraphlan {
+
+	publishDir "${OUTDIR}/Metaphlan2", mode: 'copy'
+	
+	input:
+	file(abundances) from inputGraphlan
+
+	output:
+	set file(phylo_png),file(phylo_xml) into outputGraphlan
+
+	script:
+	pyhlo_png = "metaphlan.phylogeny.png"
+	phylo_xml = "metaphlan.phylogeny.xml"
+
+	"""
+		export2graphlan.py --skip_rows 1,2 \
+			-i $abundances \
+			--tree merged_abundance.tree.txt \
+			--annotation merged_abundance.annot.txt \
+			--most_abundant 100 \
+			--abundance_threshold 1 \
+			--least_biomarkers 10 \
+			--annotations 5,6 \
+			--external_annotations 7 \
+			--min_clade_size 1
+
+		 graphlan_annotate.py --annot merged_abundance.annot.txt merged_abundance.tree.txt $phylo_xml
+
+		graphlan.py --dpi 300 $phylo_xml $phylo_png --external_legends
+	"""
+
+}
+
 process runBuildHeatmap {
 
 	publishDir "${OUTDIR}/Metaphlan2", mode: 'copy'
 
 	input:
-	file(abundance) from abundanceMetaphlan
+	file(abundance) from inputHeatmap
 
 	output:
 	file(heatmap) into outputHeatmap
