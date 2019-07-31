@@ -217,7 +217,7 @@ process runGraphlan {
 		graphlan_annotate.py --annot merged_abundance.annot.txt merged_abundance.tree.txt $phylo_xml
 
 		graphlan.py --dpi ${params.dpi}  $phylo_xml $pyhlo_png --external_legends
-		graphlan.py --dpi ${params.dpi}  $phylo_xml $pyhlo_svg --external_legends
+		graphlan.py --dpi ${params.dpi}  $phylo_xml $phylo_svg --external_legends
 	"""
 
 }
