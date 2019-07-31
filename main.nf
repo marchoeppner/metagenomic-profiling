@@ -193,10 +193,11 @@ process runGraphlan {
 	file(abundances) from inputGraphlan
 
 	output:
-	set file(pyhlo_png),file(phylo_xml),file(phylo_annot),file(phylo_legend) into outputGraphlan
+	set file(pyhlo_png),file(phylo_svg),file(phylo_xml),file(phylo_annot),file(phylo_legend) into outputGraphlan
 
 	script:
 	pyhlo_png = "metaphlan.phylogeny.png"
+        phylo_svg = "metaphlan.phylogeny.svg"
 	phylo_xml = "metaphlan.phylogeny.xml"
 	phylo_annot = "metaphlan.phylogeny_annot.png"
 	phylo_legend = "metaphlan.phylogeny_legend.png"
@@ -216,6 +217,7 @@ process runGraphlan {
 		graphlan_annotate.py --annot merged_abundance.annot.txt merged_abundance.tree.txt $phylo_xml
 
 		graphlan.py --dpi ${params.dpi}  $phylo_xml $pyhlo_png --external_legends
+		graphlan.py --dpi ${params.dpi}  $phylo_xml $pyhlo_svg --external_legends
 	"""
 
 }
