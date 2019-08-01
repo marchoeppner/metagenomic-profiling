@@ -192,11 +192,13 @@ process runGraphlan {
 	file(abundances) from inputGraphlan
 
 	output:
-	set file(pyhlo_png),file(phylo_svg),file(phylo_xml),file(phylo_annot),file(phylo_legend) into outputGraphlan
+	set file(pyhlo_png),file(phylo_svg),file(phylo_xml),file(phylo_annot),file(phylo_legend),file(phylo_svg_legend),file(phylo_svg_annot) into outputGraphlan
 
 	script:
 	pyhlo_png = "metaphlan.phylogeny.png"
         phylo_svg = "metaphlan.phylogeny.svg"
+	phylo_svg_annot = "metaphlan.phylogeny_annot.svg"
+	phylo_svg_legend = "metaphlan.phylogeny_legend.svg"
 	phylo_xml = "metaphlan.phylogeny.xml"
 	phylo_annot = "metaphlan.phylogeny_annot.png"
 	phylo_legend = "metaphlan.phylogeny_legend.png"
