@@ -61,8 +61,6 @@ if (params.ref) {
 } else if (params.genome) {
 	REF = file(params.genomes[ params.genome])
         if (!REF.exists()) exit 1, "Could not find the specified reference genome - please check the path"
-} else {
-	exit 1, "Must provide the path to a refrence genome and BWA index"
 }
 
 // Logging and reporting
@@ -119,11 +117,12 @@ if ( REF ) {
 
 	   publishDir "${OUTDIR}/${sampleID}/Host", mode: 'copy'
 
+	   scratch true
+
 	   input:
 	   set sampleID,file(left),file(right) from inputBwa
 
 	   output:
-	   set sampleID,file(bam) into alignedBam
 	   file(stats) into BamStats
 
 	   file(samtools_version) into version_samtools
