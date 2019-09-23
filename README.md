@@ -6,18 +6,12 @@
 
 This pipelines analyses short reads and identifies the most likely species in the respective sample. 
 
-## Executing the pipeline
+### Documentation 
 
-This pipeline requires Nextflow >= 0.30.2. All dependencies are provided through Bioconda and pre-built containers. 
-Please make sure that conda/miniconda2 or Singularity are available before starting the pipeline. 
+Documentation about the pipeline can be found in the `docs/` directory or under the links below:
 
-Metaphlan requires a reference databases that is *not* included with the Bioconda packages. On RZCluster, these are
-available automatically through the included config file. 
-
-To run the pipeline, do:
-
-`nextflow run marchoeppner/metagenomic-profile --reads '/path/to/reads/' ` 
-
-
-
-
+1. [What happens in this pipeline?](docs/pipeline.md)
+2. [Installation and configuration](docs/installation.md)
+3. [Running the pipeline](docs/usage.md)
+4. [Output](docs/output.md)
+5. [Troubleshooting](docs/troubleshooting.md)

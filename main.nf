@@ -11,13 +11,14 @@ def helpMessage() {
   The typical command for running the pipeline is as follows:
   nextflow run marchoeppner/metagenomic-profile --reads '/path/to/*_R{1,2}_001.fastq.gz' 
   Mandatory arguments:
-  --reads 	The path to the folder containing PE metagenomic reads (1 per sample)
+  --reads 		The path to the folder containing PE metagenomic reads (1 per sample)
 
   Optonal arguments:
-  --ref         The path to the reference genome for mapping stats (must be accompanied by a BWA index!)
-  --genome	Instead of --ref, use a pre-configured genome sequence by its common name (only RZCluster)
-  --email 	An eMail adress to which reports are sent
-  -profile      The nextflow execution profile to use
+  --ref         	The path to the reference genome for mapping stats (must be accompanied by a BWA index!)
+  --genome		Instead of --ref, use a pre-configured genome sequence by its common name (only RZCluster)
+  --email 		An eMail adress to which reports are sent
+  --strainphlan		Run the Strainphlan module for Metaphlan (default: false)
+  -profile      	The nextflow execution profile to use
 
   """.stripIndent()
 }
@@ -172,6 +173,9 @@ process runMetaphlan {
 process runSample2Markers {
 
 	publishDir "${OUTDIR}/Strainphlan2/Markers", mode: 'copy'
+
+	when:
+	params.strainphlan
 
 	input:
 	set val(sampleID),file(sam_out) from outputMetaphlanBowtie
