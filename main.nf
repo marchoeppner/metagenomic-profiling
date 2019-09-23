@@ -138,6 +138,7 @@ if ( REF ) {
         	samtools --version &> $samtools_version
 		bwa mem -M -t ${task.cpus} ${REF} $left $right | samtools sort -m 4G -O BAM - > $bam
 		samtools stats $bam > $stats
+		rm $bam
 	
 	   """
 	}
@@ -152,17 +153,55 @@ process runMetaphlan {
 
    output:
    file(metaphlan_out) into outputMetaphlan
+   set val(sampleID),file(sam_out) into outputMetaphlanBowtie
    file "v_metaphlan.txt" into version_metaphlan
 
    script:
 
    metaphlan_out = sampleID + ".out"
-
+   bowtie_out = sampleID + "bowtie2.txt"
+   sam_out = sampleID + ".sam.bz2"
    """
      metaphlan2.py --version &> v_metaphlan.txt
-     metaphlan2.py --bowtie2db $METAPHLAN_DB --nproc ${task.cpus} --input_type fastq <(zcat $left_reads $right_reads ) > $metaphlan_out
+     metaphlan2.py --bowtie2db $METAPHLAN_DB --samout $sam_out --bowtie2out $bowtie_out --nproc ${task.cpus} --input_type fastq <(zcat $left_reads $right_reads ) > $metaphlan_out
 
    """
+
+}
+
+process runSample2Markers {
+
+	publishDir "${OUTDIR}/Strainphlan2/Markers", mode: 'copy'
+
+	input:
+	set val(sampleID),file(sam_out) from outputMetaphlanBowtie
+
+	output:
+	set val(sampleID),file("*.markers") into SampleMarkers
+
+	script:
+
+	"""
+		sample2markers.py --nprocs ${task.cpus} --ifn_samples $sam_out --input_type sam --output_dir .
+	"""
+}
+
+process runStrainphlanClades {
+
+	publishDir "${OUTDIR}/Strainphlan2/Clades", mode: 'copy'
+
+	input:
+	set val(sampleID),file(markers) from SampleMarkers
+
+	output:
+	set val(sampleID),file(clades) into StrainClades
+
+	script:
+	clades = sampleID + ".clades.txt"
+
+	"""
+		strainphlan.py --nprocs_main ${task.cpus} --ifn_samples *.markers --output_dir . --print_clades_only > $clades
+	"""
 
 }
 
@@ -249,6 +288,25 @@ process runBuildHeatmap {
 			--minv 0.1 \
 			--dpi ${params.dpi}
 	"""
+}
+
+process runMultiqc {
+
+	publishDir "${OUTDIR}/MultiQC", mode: 'copy'
+
+	input:
+	set file(json),file(html) from fastp_results.collect()
+
+	output:
+	file(multiqc)
+
+	script:
+	multiqc = "multiqc_report.html"
+
+	"""
+		multiqc .
+	"""
+
 }
 
 workflow.onComplete {
