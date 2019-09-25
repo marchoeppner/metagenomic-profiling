@@ -18,6 +18,7 @@ def helpMessage() {
   --genome		Instead of --ref, use a pre-configured genome sequence by its common name (only RZCluster)
   --email 		An eMail adress to which reports are sent
   --strainphlan		Run the Strainphlan module for Metaphlan (default: false)
+  --figures 		Create overview graphics from the result (default: false). Only recommended for smaller sample sizes. 
   -profile      	The nextflow execution profile to use
 
   """.stripIndent()
@@ -230,6 +231,9 @@ process runMergeAbundance {
 process runGraphlan {
 
 	publishDir "${OUTDIR}/Metaphlan2/Phylogeny", mode: 'copy'
+
+	when:
+	params.figures
 	
 	input:
 	file(abundances) from inputGraphlan
@@ -269,6 +273,9 @@ process runGraphlan {
 process runBuildHeatmap {
 
 	publishDir "${OUTDIR}/Metaphlan2/Heatmap", mode: 'copy'
+
+	when:
+	params.figures 
 
 	input:
 	file(abundance) from inputHeatmap
