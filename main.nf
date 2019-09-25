@@ -114,7 +114,7 @@ process runFastp {
 	"""
 }
 
-if ( REF ) {
+if ( params.ref || params.genome ) {
 	process runBwa {
 
 	   publishDir "${OUTDIR}/${sampleID}/Host", mode: 'copy'
