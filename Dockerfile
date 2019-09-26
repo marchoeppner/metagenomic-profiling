@@ -5,3 +5,4 @@ LABEL authors="Marc Hoeppner" \
 COPY environment.yml /
 RUN conda env create -f /environment.yml && conda clean -a
 ENV PATH /opt/conda/envs/metagenomics-profiling-1.0/bin:$PATH
+RUN metaphlan2.py --install
