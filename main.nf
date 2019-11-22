@@ -109,7 +109,7 @@ process runFastp {
 	html = reads[0].getBaseName() + ".fastp.html"
 
 	"""
-		fastp --in1 ${reads[0]} --in2 ${reads[1]} --out1 $left --out2 $right -w ${task.cpus} -j $json -h $html --length_required 35
+		fastp --in1 ${reads[0]} --in2 ${reads[1]} --out1 $left --out2 $right --detect_adapter_for_pe -w ${task.cpus} -j $json -h $html --length_required 35
 	"""
 }
 
