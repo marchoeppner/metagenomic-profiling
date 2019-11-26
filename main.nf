@@ -157,6 +157,7 @@ process runMetaphlan {
    file(metaphlan_out) into outputMetaphlan
    set val(sampleID),file(sam_out) into outputMetaphlanBowtie
    file "v_metaphlan.txt" into version_metaphlan
+   file(sam_out)
 
    script:
 
