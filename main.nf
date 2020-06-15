@@ -5,7 +5,7 @@ OUTDIR = params.outdir
 def helpMessage() {
   log.info"""
   =================================================================
-   IKMB | Metaphlan2 Pipeline | v${workflow.manifest.version}
+   IKMB | Metaphlan3 Pipeline | v${workflow.manifest.version}
   =================================================================
   Usage:
   The typical command for running the pipeline is as follows:
@@ -76,13 +76,13 @@ params.version = workflow.manifest.version
 // Header log info 
 
 log.info "=========================================" 
-log.info "METAPHLAN2 P I P E L I N E"
+log.info "METAPHLAN3 P I P E L I N E"
 log.info "IKMB pipeline version v${params.version}" 
-log.info "Nextflow Version: $workflow.nextflow.version" 
+log.info "Nextflow Version: 	$workflow.nextflow.version" 
 log.info "=== Inputs =============================="
 log.info "Kneaddata DB:		${params.kneaddata_db}"
-log.info "Reads:		${params.reads}"
-log.info "Command Line: $workflow.commandLine" 
+log.info "Reads:			${params.reads}"
+log.info "Command Line:		$workflow.commandLine" 
 if (params.genome) {
 	log.info "Host genome: ${params.genome}"
 } else if (params.ref) {
@@ -311,25 +311,17 @@ process runBuildHeatmap {
 
 	script:
 	heatmap = "metaphlan.abundances.png"
-
 	"""
 		grep -E "(s__)|(^ID)" $abundance | grep -v "t__" | sed 's/^.*s__//g' > merged_abundance_table_species.txt
-		hclust2.py -i $abundance -o $heatmap --ftop 25 \
-			--skip_rows 1 \
-			--ftop 50 \
-			--f_dist_f correlation \
-			--s_dist_f braycurtis \
-			--cell_aspect_ratio 9 \
-			-s --fperc 99 \
-			--flabel_size 4 \
-			--metadata_rows 2,3,4 \
-			--legend_file HMP.sqrt_scale.legend.png \
-			--max_flabel_len 100 \
-			--metadata_height 0.075 \
-			--minv 0.01 \
-			--no_slabels \
-			--dpi ${params.dpi} \
-			--slinkage complete
+		hclust2.py -i merged_abundance_table_species.txt -o $heatmap \
+		--ftop 25 \
+		--f_dist_f braycurtis \
+		--s_dist_f braycurtis \
+		--cell_aspect_ratio 0.5 \
+		-l --flabel_size 6 \
+		--slabel_size 6 --max_flabel_len 100 \
+		--max_slabel_len 100 \
+		--minv 0.1 --dpi 300
 	"""
 }
 
