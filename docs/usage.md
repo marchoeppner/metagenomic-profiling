@@ -10,5 +10,5 @@ available automatically through the included config file.
 
 To run the pipeline, do:
 
-`nextflow run marchoeppner/metagenomic-profile --reads '/path/to/reads/' `
+`nextflow run marrchoeppner/metagenomic-profile --reads '/path/to/reads/*_R{1,2}_001.fastq.gz'`
 
