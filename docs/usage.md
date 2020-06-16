@@ -2,13 +2,19 @@
 
 # Usage
 
-This pipeline requires Nextflow >= 0.30.2. All dependencies are provided through Bioconda and pre-built containers.
+This pipeline requires Nextflow >= 19.01.2. All dependencies are provided through Bioconda and pre-built containers.
 Please make sure that conda/miniconda2 or Singularity are available before starting the pipeline.
 
-Metaphlan requires a reference databases that is *not* included with the Bioconda packages. On RZCluster, these are
+Metaphlan3 requires a reference databases that is *not* included with the Bioconda packages. On the Kiel MedCluster, these are
 available automatically through the included config file. 
 
 To run the pipeline, do:
 
 `nextflow run marrchoeppner/metagenomic-profile --reads '/path/to/reads/*_R{1,2}_001.fastq.gz'`
+
+# Other options
+
+## `--figures`
+Produce graphical representations of the data (heatmap using hclust2 and taxonomic representation with GraphLan2).
+
 
