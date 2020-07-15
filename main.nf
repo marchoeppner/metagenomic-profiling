@@ -32,13 +32,6 @@ if (params.help){
 
 // sanity checks 
 
-//if (params.metaphlan_pkl) {
-//	METAPHLAN_PKL=file(params.metaphlan_pkl)
-//	if (!METAPHLAN_PKL.exists()) exit 1, "Could not find the Metaphlan PKL file - please check the path"
-//} else {
-//	exit 1, "No Metaphlan PKL file was specified, aborting..."
-//}
-
 if (params.metaphlan_db) {
 	METAPHLAN_DB=params.metaphlan_db
 	db_path = file(METAPHLAN_DB)
@@ -56,7 +49,7 @@ if (params.genome) {
 }
 
 if (!params.kneaddata_db) {
-	exit 1, "Not Kneadata DB directory defined (--kneaddata_dd)"
+	exit 1, "No Kneadata DB directory defined (--kneaddata_db)"
 }
 
 if (params.ref) {
@@ -97,7 +90,26 @@ log.info "========================================="
 
 Channel.fromFilePairs(params.reads )
 	.ifEmpty {exit 1, "Could not find the specified input reads $params.reads"}
-	.set { inputKneaddata }
+	.into { inputKneaddata ; inputFastQC }
+
+process runFastQC {
+
+	label 'fastqc'
+
+	publishDir "${OUTDIR}/${sampleID}/FastQC", mode: 'copy'
+
+	input:
+	set val(sampleID),file(reads) from inputFastQC
+
+	output:
+	file "*_fastqc.{zip,html}" into fastqc_results
+
+	script:
+	"""
+	fastqc --quiet --threads $task.cpus $reads
+	"""
+
+}
 
 process runKneaddata {
 
@@ -238,7 +250,7 @@ process runStrainphlanClades {
 
 process runMergeAbundance {
 
-	publishDir "${OUTDIR}/Metaphlan2", mode: 'copy'
+	publishDir "${OUTDIR}/Metaphlan3", mode: 'copy'
 
 	input:
 	file(results) from outputMetaphlan.collect()
@@ -256,7 +268,7 @@ process runMergeAbundance {
 
 process runGraphlan {
 
-	publishDir "${OUTDIR}/Metaphlan2/Phylogeny", mode: 'copy'
+	publishDir "${OUTDIR}/Metaphlan3/Phylogeny", mode: 'copy'
 
 	when:
 	params.figures
@@ -298,7 +310,7 @@ process runGraphlan {
 
 process runBuildHeatmap {
 
-	publishDir "${OUTDIR}/Metaphlan2/Heatmap", mode: 'copy'
+	publishDir "${OUTDIR}/Metaphlan3/Heatmap", mode: 'copy'
 
 	when:
 	params.figures 
@@ -322,6 +334,25 @@ process runBuildHeatmap {
 		--slabel_size 6 --max_flabel_len 100 \
 		--max_slabel_len 100 \
 		--minv 0.1 --dpi 300
+	"""
+}
+
+process runMultiQC {
+
+	publishDir "${OUTDIR}/MultiQC", mode: 'copy'
+
+	label 'multiqc'
+
+	input:
+	file ('*') from fastqc_results.collect()
+
+	output:
+	file("multiqc_report.html")
+
+	script:
+
+	"""
+		multiqc .
 	"""
 }
 
