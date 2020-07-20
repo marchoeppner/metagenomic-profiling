@@ -1,5 +1,5 @@
-title: "Exome pipeline report"
-subtitle: "Best-practice workflow for clinical SNP calling"
+title: "Metagenome pipeline report"
+subtitle: "Best-practice metagenome pipeline using Metaphlan3"
 custom_logo: "ikmblogo.png"
 custom_logo_title: "Insitute of Clinical Molecular Biology, Kiel"
 custom_logo_url: "http://www.ikmb.uni-kiel.de"
@@ -8,13 +8,11 @@ extra_fn_clean_exts:
     - _R1
     - _R2
 report_comment: >
-    This report has been generated automatically by the IKMB Diagnostic Exome pipeline.
-    For help interpreting the outputs, please see: https://github.com/ikmb/exome-seq
+    This report has been generated automatically by the IKMB Metagenome pipeline.
 
 report_header_info:
-    - Contact E-mail: "b.loescher@ikmb.uni-kiel.de"
-    - Application Type: "Whole exome sequencing"
+    - Contact E-mail: "m.hoeppner@ikmb.uni-kiel.de"
+    - Application Type: "Metagenomic profiling"
 
 top_modules:
     - 'general_stats'
-    - 'picard_hsmetrics'

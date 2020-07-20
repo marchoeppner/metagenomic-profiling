@@ -76,14 +76,15 @@ log.info "=== Inputs =============================="
 log.info "Kneaddata DB:		${params.kneaddata_db}"
 log.info "Metaphlan DB:		${params.metaphlan_db}"
 log.info "Reads:			${params.reads}"
-log.info "Command Line:		$workflow.commandLine" 
 if (params.genome) {
-	log.info "Host genome: ${params.genome}"
+	log.info "Host genome: 		${params.genome}"
 } else if (params.ref) {
-	log.info "Host genome: ${params.ref}"
+	log.info "Host genome: 		${params.ref}"
 }
+log.info "=========================================="
+log.info "Command Line:         $workflow.commandLine"
 if (workflow.containerEngine) {
-	log.info "Container Engine: ${workflow.containerEngine}"
+	log.info "Container Engine: 	${workflow.containerEngine}"
 }
 log.info "=========================================" 
 
@@ -91,7 +92,7 @@ log.info "========================================="
 
 Channel.fromFilePairs(params.reads )
 	.ifEmpty {exit 1, "Could not find the specified input reads $params.reads"}
-	.into { inputKneaddata ; inputFastQC }
+	.into { inputKneaddata ; inputFastQC ; inputBwa  }
 
 process runFastQC {
 
@@ -152,7 +153,7 @@ if ( params.ref || params.genome ) {
 	   scratch true
 
 	   input:
-	   set sampleID,file(left),file(right) from inputBwa
+	   set sampleID,file(reads) from inputBwa
 
 	   output:
 	   file(stats) into BamStats
@@ -162,18 +163,21 @@ if ( params.ref || params.genome ) {
 	   script:
 
 	   bam = sampleID + ".host_mapped.bam"
-	   stats = sampleID + "_bwa_stats.txt"
+	   stats = sampleID + ".txt"
 
 	   samtools_version = "v_samtools.txt"
 
 	   """
         	samtools --version &> $samtools_version
-		bwa mem -M -t ${task.cpus} ${REF} $left $right | samtools sort -m 4G -O BAM - > $bam
+		bwa mem -M -t ${task.cpus} ${REF} $reads | samtools sort -m 4G -O BAM - > $bam
 		samtools stats $bam > $stats
 		rm $bam
 	
 	   """
 	}
+
+} else {
+	BamStats = Channel.empty()
 }
 
 process runMetaphlan {
@@ -346,6 +350,7 @@ process runMultiQC {
 
 	input:
 	file ('*') from fastqc_results.collect()
+	file ('*') from BamStats.collect()
 
 	output:
 	file("multiqc_report.html")
