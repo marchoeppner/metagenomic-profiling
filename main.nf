@@ -74,6 +74,7 @@ log.info "IKMB pipeline version v${params.version}"
 log.info "Nextflow Version: 	$workflow.nextflow.version" 
 log.info "=== Inputs =============================="
 log.info "Kneaddata DB:		${params.kneaddata_db}"
+log.info "Metaphlan DB:		${params.metaphlan_db}"
 log.info "Reads:			${params.reads}"
 log.info "Command Line:		$workflow.commandLine" 
 if (params.genome) {
@@ -352,6 +353,9 @@ process runMultiQC {
 	script:
 
 	"""
+		cp $params.logo .
+                cp $baseDir/assets/multiqc_config.yaml multiqc_config.yaml
+
 		multiqc .
 	"""
 }
