@@ -119,7 +119,8 @@ process runKneaddata {
 
         publishDir "${OUTDIR}/${sampleID}/Kneaddata", mode: 'copy'
 
-        scratch true
+        //scratch true
+
         input:
         set val(sampleID),file(reads) from inputKneaddata
 
@@ -136,6 +137,8 @@ process runKneaddata {
                 kneaddata --input ${reads[0]} --input ${reads[1]} \
                         -t ${task.cpus} \
                         --reference-db ${params.kneaddata_db} \
+			--run-trim-repetitive \
+			--run-trf \
                         --output $outdir \
                         --trimmomatic /usr/local/share/trimmomatic-0.39-1
 

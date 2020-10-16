@@ -10,11 +10,20 @@ available automatically through the included config file.
 
 To run the pipeline, do:
 
-`nextflow run marrchoeppner/metagenomic-profile --reads '/path/to/reads/*_R{1,2}_001.fastq.gz'`
+`nextflow run marchoeppner/metagenomic-profile --reads '/path/to/reads/*_R{1,2}_001.fastq.gz'`
 
-# Other options
+## Other options
 
-## `--figures`
+### `--figures`
 Produce graphical representations of the data (heatmap using hclust2 and taxonomic representation with GraphLan2).
+
+### `--genome`
+This options needs to be pre-configured! On the IKMB Medcluster, valid options are:
+
+* human
+* mouse
+* chimp
+
+Will align reads against the respective genome to allow users to gauge the degree of "host" contribution to the overall data. 
 
 
