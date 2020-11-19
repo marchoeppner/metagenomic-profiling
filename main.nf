@@ -15,7 +15,6 @@ def helpMessage() {
 
   Optonal arguments:
   --virus		Run Kraken on virus database
-  --ref         	The path to the reference genome for mapping stats (must be accompanied by a BWA index!)
   --genome		Instead of --ref, use a pre-configured genome sequence by its common name (only RZCluster)
   --email 		An eMail adress to which reports are sent
   --figures 		Create overview graphics from the result (default: false). Only recommended for smaller sample sizes. 
@@ -54,20 +53,9 @@ if (params.genome) {
 	} else if (!params.genomes.containsKey(params.genome)) {
 		exit 1, "Specified unknown name for the host genome...valid options are: ${params.genomes.keySet()}"
 	}
-}
-
-if (!params.kneaddata_db) {
-	exit 1, "No Kneadata DB directory defined (--kneaddata_db)"
-}
-
-if (params.ref) {
-	REF = file(params.ref)
-	index_file = file(params.ref + ".bwt")
-	if (!REF.exists()) exit 1, "Could not find the specified reference genome - please check the path"
-	if  (!index_file.exists()) exit 1, "Found genome reference, but seems to be missing the BWA index files"
-} else if (params.genome) {
-	REF = file(params.genomes[ params.genome])
-        if (!REF.exists()) exit 1, "Could not find the specified reference genome - please check the path"
+	host_genome = Channel.fromPath(params.genomes[params.genome])
+} else {
+	exit 1, "No Host genome was specified...valid options are: ${params.genomes.keySet()}"
 }
 
 // Logging and reporting
@@ -81,14 +69,11 @@ log.info "METAPHLAN3 P I P E L I N E"
 log.info "IKMB pipeline version v${params.version}" 
 log.info "Nextflow Version: 	$workflow.nextflow.version" 
 log.info "=== Inputs =============================="
-log.info "Kneaddata DB:		${params.kneaddata_db}"
 log.info "Metaphlan DB:		${params.metaphlan_db}"
 log.info "Reads:			${params.reads}"
 if (params.genome) {
 	log.info "Host genome: 		${params.genome}"
-} else if (params.ref) {
-	log.info "Host genome: 		${params.ref}"
-}
+} 
 log.info "=========================================="
 log.info "Command Line:         $workflow.commandLine"
 if (workflow.containerEngine) {
@@ -98,9 +83,9 @@ log.info "========================================="
 
 // Starting the workflow
 
-Channel.fromFilePairs(params.reads )
+Channel.fromFilePairs(params.reads , flat: true )
 	.ifEmpty {exit 1, "Could not find the specified input reads $params.reads"}
-	.into { inputKneaddata ; inputFastQC ; inputBwa  }
+	.into { inputBBduk ; inputFastQC }
 
 process runFastQC {
 
@@ -109,85 +94,110 @@ process runFastQC {
 	publishDir "${OUTDIR}/${sampleID}/FastQC", mode: 'copy'
 
 	input:
-	set val(sampleID),file(reads) from inputFastQC
+	set val(sampleID),file(left),file(right) from inputFastQC
 
 	output:
 	file "*_fastqc.{zip,html}" into fastqc_results
 
 	script:
 	"""
-	fastqc --quiet --threads $task.cpus $reads
+	fastqc --quiet --threads $task.cpus $left $right
 	"""
 
 }
 
-process runKneaddata {
+process trimReads {
 
-	label 'kneaddata'
+	label 'bbmap'
 
-        publishDir "${OUTDIR}/${sampleID}/Kneaddata", mode: 'copy'
+	input:
+	set val(sampleID),file(left),file(right) from inputBBduk
+	
+	output:
+	set val(sampleID),file(left_trimmed),file(right_trimmed) into filterPEReads
+	set val(sampleID),file(unpaired) into filterSEReads
+	path bbduk_adapter_stats
+		
+	script:
+	bbduk_adapter_stats = sampleID + ".bbduk.adapter.stats"
 
-        //scratch true
+	left_trimmed = left.getBaseName() + "_trimmed.fastq.gz"
+	right_trimmed = right.getBaseName() + "_trimmed.fastq.gz"
 
-        input:
-        set val(sampleID),file(reads) from inputKneaddata
+	unpaired = sampleID + "_unpaired.fastq.gz"
 
-        output:
-        set val(sampleID),file("${outdir}/${left}"),file("${outdir}/${right}") into (inputMetaphlan,inputKraken)
-
-        script:
-        left = sampleID + "_R1_001_kneaddata_paired_1.fastq.gz"
-        right = sampleID + "_R1_001_kneaddata_paired_2.fastq.gz"
-
-        outdir = "output"
-
-        """
-                kneaddata --input ${reads[0]} --input ${reads[1]} \
-                        -t ${task.cpus} \
-                        --reference-db ${params.kneaddata_db} \
-			--run-trf \
-                        --output $outdir \
-                        --trimmomatic /usr/local/share/trimmomatic-0.39-1
-
-                cd $outdir
-                for i in \$(echo *paired_*.fastq); do gzip \$i ; done;
-        """
+	"""
+		bbduk.sh stats=$bbduk_adapter_stats threads=${task.cpus} in=${left} in2=${right} out1=${left_trimmed} out2=${right_trimmed} outs=unpaired_trimmed ref=${params.adapters} ktrim=r k=23 mink=11 hdist=1 minlength=${params.min_read_length} tpe tbo
+	"""
 
 }
 
-if ( params.ref || params.genome ) {
-	process runBwa {
+process cleanPEReads {
 
-	   publishDir "${OUTDIR}/${sampleID}/Host", mode: 'copy'
+	label 'bbmap'
 
-	   scratch true
+	input:
+	set val(sampleID),file(left),file(right) from filterPEReads
 
-	   input:
-	   set sampleID,file(reads) from inputBwa
+	output:
+	set val(sampleID),file(left_clean),file(right_clean) into pe_reads_clean
 
-	   output:
-	   file(stats) into BamStats
-
-	   file(samtools_version) into version_samtools
-
-	   script:
-
-	   bam = sampleID + ".host_mapped.bam"
-	   stats = sampleID + ".txt"
-
-	   samtools_version = "v_samtools.txt"
-
-	   """
-        	samtools --version &> $samtools_version
-		bwa mem -M -t ${task.cpus} ${REF} $reads | samtools sort -m 4G -O BAM - > $bam
-		samtools stats $bam > $stats
-		rm $bam
+	script:
+	left_clean = left.getBaseName() + "_clean.fastq.gz"
+	righ_clean = right.getBaseName() + "_clean.fastq.gz"
+	artifact_stats = sampleID + ".bbduk.artifacts.stats"
 	
-	   """
-	}
+	"""
+		 bbduk.sh stats=$artifact_stats threads=${task.cpus} in=${left} in2=${right} k=31 ref=artifacts,phix ordered cardinality out1=${left_clean} out2=${right_clean} minlength=${params.min_read_length}
+	"""
 
-} else {
-	BamStats = Channel.empty()
+}
+
+process cleanSEReads {
+
+	label 'bbmap'
+
+	input:
+	set val(sampleID),file(unpaired) from filterSEReads
+
+	output:
+	set val(sampleID),file(unpaired_clean) into se_reads_clean
+
+	script:
+
+	unpaired_clean = unpaired.getBaseName() + "_clean.fastq.gz"
+
+	"""
+		bbduk.sh threads=${task.cpus} in=${unpaired}  k=31 ref=artifacts,phix ordered cardinality out1=${unpaired_clean} minlength=${params.min_read_length}
+
+	"""
+
+}
+
+
+reads_for_mapping = pe_reads_clean.join(se_reads_clean)
+
+process filterReads {
+
+	label 'bowtie2'
+
+	input:
+	set val(sampleID),file(left),file(right),file(unpaired) from reads_for_mapping
+	path(index) from host_genome.collect()
+
+	output:
+	set val(sampleID),path(left_clean),path(right_clean),path(unpaired_clean) into inputKraken,inputMetaphlan
+	path(bowtie_log) into bowtie_log
+
+	script:
+	left_clean = sampleID + ".clean.R1.fastq.gz"
+	right_clean = sampleID + ".clean.R2.fastq.gz"
+	unpaired_clean = sampleID + ".clean.unpaired.fastq.gz"
+	bowtie_log = sampleID + ".txt"
+	"""
+		bowtie2 -x $index -1 $left -2 $right -u $unpaired -S $sam --no-unal -p ${task.cpus} --un-gz $unpaired_clean  --un-conc-gz ${sampleID}.clean.R%.fastq.gz 2> $bowtie_log
+	"""
+
 }
 
 if (params.kraken) {
@@ -383,7 +393,6 @@ process runMultiQC {
 
 	input:
 	file ('*') from fastqc_results.collect()
-	file ('*') from BamStats.collect()
 	file('*') from KrakenYaml.collect()
 	output:
 	file("multiqc_report.html")
