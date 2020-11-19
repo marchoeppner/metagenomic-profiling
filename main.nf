@@ -14,10 +14,10 @@ def helpMessage() {
   --reads 		The path to the folder containing PE metagenomic reads (1 per sample)
 
   Optonal arguments:
+  --virus		Run Kraken on virus database
   --ref         	The path to the reference genome for mapping stats (must be accompanied by a BWA index!)
   --genome		Instead of --ref, use a pre-configured genome sequence by its common name (only RZCluster)
   --email 		An eMail adress to which reports are sent
-  --strainphlan		Run the Strainphlan module for Metaphlan (default: false)
   --figures 		Create overview graphics from the result (default: false). Only recommended for smaller sample sizes. 
   -profile      	The nextflow execution profile to use
 
@@ -38,6 +38,14 @@ if (params.metaphlan_db) {
 	if (!db_path.exists()) exit 1, "Could not find your Metaphlan DB - please check the path"
 } else {
 	exit 1, "No Metaphlan database was specified, aborting..."
+}
+if (params.virus && params.kraken2_db) {
+	KRAKEN2_DB=params.kraken2_db
+	db_path = file(KRAKEN2_DB)
+	if (!db_path.exists()) exit 1, "Could not find your KrakenDB - please check the path"
+	params.kraken = true
+} else if (params.virus) {
+        exit 1, "No Kraken database was specified, aborting..."
 }
 
 if (params.genome) {
@@ -125,7 +133,7 @@ process runKneaddata {
         set val(sampleID),file(reads) from inputKneaddata
 
         output:
-        set val(sampleID),file("${outdir}/${left}"),file("${outdir}/${right}") into inputMetaphlan
+        set val(sampleID),file("${outdir}/${left}"),file("${outdir}/${right}") into (inputMetaphlan,inputKraken)
 
         script:
         left = sampleID + "_R1_001_kneaddata_paired_1.fastq.gz"
@@ -137,7 +145,6 @@ process runKneaddata {
                 kneaddata --input ${reads[0]} --input ${reads[1]} \
                         -t ${task.cpus} \
                         --reference-db ${params.kneaddata_db} \
-			--run-trim-repetitive \
 			--run-trf \
                         --output $outdir \
                         --trimmomatic /usr/local/share/trimmomatic-0.39-1
@@ -181,6 +188,50 @@ if ( params.ref || params.genome ) {
 
 } else {
 	BamStats = Channel.empty()
+}
+
+if (params.kraken) {
+	process runKraken2 {
+
+        	label 'kraken'
+
+	        publishDir "${OUTDIR}/${sampleID}/Kraken/", mode: 'copy'
+
+	        input:
+        	set val(sampleID),file(left),file(right) from inputKraken
+
+	        output:
+        	set val(sampleID),file(report) into KrakenReport
+	        file(kraken_log)
+
+        	script:
+	        report = sampleID + ".kraken2_report.txt"
+        	kraken_log = sampleID + ".kraken2.log"
+
+	        """
+        	        kraken2 --db $KRAKEN2_DB --threads ${task.cpus} --output $kraken_log --report $report $left $right
+	        """
+	}
+
+	process Kraken2Yaml {
+
+	        input:
+        	file(reports) from KrakenReport.collect()
+
+	        output:
+        	file(report_yaml) into KrakenYaml
+
+	        script:
+
+        	report_yaml = "kraken_report_mqc.yaml"
+	        """	
+        	        kraken2yaml.pl --outfile $report_yaml
+	        """
+
+	}
+
+} else {
+	KrakenYaml = Channel.empty()
 }
 
 process runMetaphlan {
@@ -233,27 +284,6 @@ process runSample2Markers {
 	"""
 		sample2markers.py -n ${task.cpus} -i $sam_out -o .
 	"""
-}
-
-process runStrainphlanClades {
-
-	label 'metaphlan'
-	
-	publishDir "${OUTDIR}/Strainphlan2/Clades", mode: 'copy'
-
-	input:
-	set val(sampleID),file(markers) from SampleMarkers
-
-	output:
-	set val(sampleID),file(clades) into StrainClades
-
-	script:
-	clades = sampleID + ".clades.txt"
-
-	"""
-		strainphlan.py -n ${task.cpus} -i *.markers -o . --print_clades_only > $clades
-	"""
-
 }
 
 process runMergeAbundance {
@@ -354,7 +384,7 @@ process runMultiQC {
 	input:
 	file ('*') from fastqc_results.collect()
 	file ('*') from BamStats.collect()
-
+	file('*') from KrakenYaml.collect()
 	output:
 	file("multiqc_report.html")
 
