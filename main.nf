@@ -53,10 +53,17 @@ if (params.genome) {
 	} else if (!params.genomes.containsKey(params.genome)) {
 		exit 1, "Specified unknown name for the host genome...valid options are: ${params.genomes.keySet()}"
 	}
-	host_genome = Channel.fromPath(params.genomes[params.genome])
+	bowtie_base = params.genomes[params.genome]
+	host_genome = Channel.fromPath("${bowtie_base}*")
 } else {
 	exit 1, "No Host genome was specified...valid options are: ${params.genomes.keySet()}"
 }
+
+if (params.rapid) {
+	log.info "Running in rapid mode - this may produce less accurate results!"
+}
+
+BLOOMFILTER_HOST = params.bloomfilter_host
 
 // Logging and reporting
 
@@ -74,8 +81,11 @@ log.info "Reads:			${params.reads}"
 if (params.genome) {
 	log.info "Host genome: 		${params.genome}"
 } 
+if (params.rapid) {
+	log.info "Host filter:		${params.bloomfilter_host}"
+}
 log.info "=========================================="
-log.info "Command Line:         $workflow.commandLine"
+log.info "Command Line:         	$workflow.commandLine"
 if (workflow.containerEngine) {
 	log.info "Container Engine: 	${workflow.containerEngine}"
 }
@@ -85,7 +95,8 @@ log.info "========================================="
 
 Channel.fromFilePairs(params.reads , flat: true )
 	.ifEmpty {exit 1, "Could not find the specified input reads $params.reads"}
-	.into { inputBBduk ; inputFastQC }
+	.into { Reads ; inputFastQC }
+
 
 process runFastQC {
 
@@ -106,9 +117,68 @@ process runFastQC {
 
 }
 
+if (params.rapid) {
+
+	process BloomFilter {
+
+		label 'biobloom'
+
+		scratch true
+
+		input:
+		set val(sampleID),file(left),file(right) from Reads
+
+		output:
+		set val(sampleID),file(clean_reads) into inputReformat
+
+		script:
+		analysis = sampleID + ".Host"
+		clean_reads = analysis + ".filtered.fastq.gz"
+
+                """
+                        biobloomcategorizer -p $analysis --gz_output -d -n -e -s 0.01 -t ${task.cpus} -f "$BLOOMFILTER_HOST" $left $right | gzip > $clean_reads
+                """
+
+        }
+
+        // *************************
+        // Take the interlaved non-host reads and produce sane PE data
+        // *************************
+        process runDeinterlave {
+
+                label 'bbmap'
+
+		scratch true
+
+                publishDir "${OUTDIR}/${id}/Bloomfilter/Host", mode: 'copy'
+
+                input:
+                set val(id),file(reads) from inputReformat
+
+                output:
+                set val(id),file(left),file(right) into inputBBduk
+
+                script:
+                left = id + "_R1_001.bloom_non_host.fastq.gz"
+                right = id + "_R2_001.bloom_non_host.fastq.gz"
+
+                """
+                        reformat.sh in=$reads out1=$left out2=$right addslash int
+                """
+
+        }
+
+} else {
+
+	inputBBduk = Reads
+
+}
+
 process trimReads {
 
 	label 'bbmap'
+
+	scratch true
 
 	input:
 	set val(sampleID),file(left),file(right) from inputBBduk
@@ -127,14 +197,15 @@ process trimReads {
 	unpaired = sampleID + "_unpaired.fastq.gz"
 
 	"""
-		bbduk.sh stats=$bbduk_adapter_stats threads=${task.cpus} in=${left} in2=${right} out1=${left_trimmed} out2=${right_trimmed} outs=unpaired_trimmed ref=${params.adapters} ktrim=r k=23 mink=11 hdist=1 minlength=${params.min_read_length} tpe tbo
+		bbduk.sh stats=$bbduk_adapter_stats threads=${task.cpus} in=${left} in2=${right} out1=${left_trimmed} out2=${right_trimmed} outs=$unpaired ref=${params.adapters} ktrim=r k=23 mink=11 hdist=1 minlength=${params.min_read_length} tpe tbo
 	"""
-
 }
 
 process cleanPEReads {
 
 	label 'bbmap'
+
+	scratch true
 
 	input:
 	set val(sampleID),file(left),file(right) from filterPEReads
@@ -144,7 +215,7 @@ process cleanPEReads {
 
 	script:
 	left_clean = left.getBaseName() + "_clean.fastq.gz"
-	righ_clean = right.getBaseName() + "_clean.fastq.gz"
+	right_clean = right.getBaseName() + "_clean.fastq.gz"
 	artifact_stats = sampleID + ".bbduk.artifacts.stats"
 	
 	"""
@@ -156,6 +227,8 @@ process cleanPEReads {
 process cleanSEReads {
 
 	label 'bbmap'
+
+	scratch true
 
 	input:
 	set val(sampleID),file(unpaired) from filterSEReads
@@ -174,16 +247,17 @@ process cleanSEReads {
 
 }
 
-
 reads_for_mapping = pe_reads_clean.join(se_reads_clean)
 
 process filterReads {
 
 	label 'bowtie2'
 
+	publishDir "${params.outdir}/${sampleID}/reads_clean", mode: 'copy'
+
 	input:
 	set val(sampleID),file(left),file(right),file(unpaired) from reads_for_mapping
-	path(index) from host_genome.collect()
+	path(bwt_files) from host_genome.collect()
 
 	output:
 	set val(sampleID),path(left_clean),path(right_clean),path(unpaired_clean) into inputKraken,inputMetaphlan
@@ -194,8 +268,9 @@ process filterReads {
 	right_clean = sampleID + ".clean.R2.fastq.gz"
 	unpaired_clean = sampleID + ".clean.unpaired.fastq.gz"
 	bowtie_log = sampleID + ".txt"
+	index = "genome"
 	"""
-		bowtie2 -x $index -1 $left -2 $right -u $unpaired -S $sam --no-unal -p ${task.cpus} --un-gz $unpaired_clean  --un-conc-gz ${sampleID}.clean.R%.fastq.gz 2> $bowtie_log
+		bowtie2 -x $index -1 $left -2 $right -U $unpaired -S /dev/null --no-unal -p ${task.cpus} --un-gz $unpaired_clean  --un-conc-gz ${sampleID}.clean.R%.fastq.gz 2> $bowtie_log
 	"""
 
 }
@@ -208,7 +283,7 @@ if (params.kraken) {
 	        publishDir "${OUTDIR}/${sampleID}/Kraken/", mode: 'copy'
 
 	        input:
-        	set val(sampleID),file(left),file(right) from inputKraken
+        	set val(sampleID),file(left),file(right),file(unpaired) from inputKraken
 
 	        output:
         	set val(sampleID),file(report) into KrakenReport
@@ -251,7 +326,7 @@ process runMetaphlan {
    publishDir "${OUTDIR}/${sampleID}/Metaphlan3", mode: 'copy'
 
    input:
-   set val(sampleID),file(left_reads),file(right_reads) from inputMetaphlan
+   set val(sampleID),file(left_reads),file(right_reads),file(unpaired) from inputMetaphlan
 
    output:
    file(metaphlan_out) into outputMetaphlan
