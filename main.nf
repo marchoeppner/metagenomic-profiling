@@ -47,23 +47,27 @@ if (params.virus && params.kraken2_db) {
         exit 1, "No Kraken database was specified, aborting..."
 }
 
-if (params.genome) {
-	if (!params.genomes) {
-		exit 1, "Specified a genome name for host mapping, but no genomes are configured for your profile...exiting."
-	} else if (!params.genomes.containsKey(params.genome)) {
-		exit 1, "Specified unknown name for the host genome...valid options are: ${params.genomes.keySet()}"
-	}
-	bowtie_base = params.genomes[params.genome]
-	host_genome = Channel.fromPath("${bowtie_base}*")
-} else {
+if (!params.genome) {
 	exit 1, "No Host genome was specified...valid options are: ${params.genomes.keySet()}"
+} else if (!params.genomes) {
+	exit 1, "Specified a genome name for host mapping, but no genomes are configured for your profile...exiting."
+} else if (!params.genomes.containsKey(params.genome)) {
+	exit 1, "Specified unknown name for the host genome...valid options are: ${params.genomes.keySet()}"
+} else {
+
+	log.info "Using ${params.genome} as host species...setting relevant options"
+
+	bowtie_base = params.genomes[params.genome].bowtie_index
+	bloom_index = params.genomes[params.genome].bloom_index
+
+	host_genome = Channel.fromPath("${bowtie_base}*")
 }
 
 if (params.rapid) {
 	log.info "Running in rapid mode - this may produce less accurate results!"
 }
 
-BLOOMFILTER_HOST = params.bloomfilter_host
+BLOOMFILTER_HOST = bloom_index
 
 // Logging and reporting
 
@@ -78,9 +82,7 @@ log.info "Nextflow Version: 	$workflow.nextflow.version"
 log.info "=== Inputs =============================="
 log.info "Metaphlan DB:		${params.metaphlan_db}"
 log.info "Reads:			${params.reads}"
-if (params.genome) {
-	log.info "Host genome: 		${params.genome}"
-} 
+log.info "Host genome: 		${params.genome}"
 if (params.rapid) {
 	log.info "Host filter:		${params.bloomfilter_host}"
 }
