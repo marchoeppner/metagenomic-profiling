@@ -39,10 +39,10 @@ if (params.metaphlan_db) {
 	exit 1, "No Metaphlan database was specified, aborting..."
 }
 if (params.virus && params.kraken2_db) {
+	log.info "Enabling Kraken for virus detection..."
 	KRAKEN2_DB=params.kraken2_db
 	db_path = file(KRAKEN2_DB)
 	if (!db_path.exists()) exit 1, "Could not find your KrakenDB - please check the path"
-	params.kraken = true
 } else if (params.virus) {
         exit 1, "No Kraken database was specified, aborting..."
 }
@@ -81,6 +81,7 @@ log.info "IKMB pipeline version v${params.version}"
 log.info "Nextflow Version: 	$workflow.nextflow.version" 
 log.info "=== Inputs =============================="
 log.info "Metaphlan DB:		${params.metaphlan_db}"
+log.info "Kraken DB:		${params.kraken2_db}"
 log.info "Reads:			${params.reads}"
 log.info "Host genome: 		${params.genome}"
 if (params.rapid) {
@@ -291,7 +292,7 @@ process filterReads {
 
 }
 
-if (params.kraken) {
+if (params.virus) {
 	process runKraken2 {
 
         	label 'kraken'
