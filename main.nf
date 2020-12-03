@@ -97,8 +97,22 @@ log.info "========================================="
 
 Channel.fromFilePairs(params.reads , flat: true )
 	.ifEmpty {exit 1, "Could not find the specified input reads $params.reads"}
-	.into { Reads ; inputFastQC }
+	.into { Reads ; inputFastQC; inputStaging }
 
+process prepMetaphlan {
+
+	executor 'local'
+
+	script:
+
+	"""
+		cd $METAPHLAN_DB
+		wget https://www.dropbox.com/sh/7qze7m7g9fe2xjg/AAAyoJpOgcjop41VIHAGWIVLa/mpa_latest?dl=1
+		mv mpa_latest?dl=1 mpa_latest
+	
+	"""
+
+}
 
 process runFastQC {
 
