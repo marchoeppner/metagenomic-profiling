@@ -15,7 +15,9 @@ available automatically through the included config file.
 
 To run the pipeline, do:
 
-`nextflow run marchoeppner/metagenomic-profile --reads '/path/to/reads/*_R{1,2}_001.fastq.gz'`
+```bash
+nextflow run marchoeppner/metagenomic-profiling --reads '/path/to/reads/*_R{1,2}_001.fastq.gz'
+```
 
 Note, that the wildcard patterns are used to group paired-end reads together. If the naming of your files does not comply with this example, you may have to use a different wildcard pattern. For Illumina data generated at the CCGA, the example shown should work. 
 

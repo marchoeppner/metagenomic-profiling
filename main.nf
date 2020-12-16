@@ -359,7 +359,7 @@ process runMetaphlan {
      metaphlan --version &> v_metaphlan.txt
      zcat $left_reads > left.fq
      zcat $right_reads > right.fq
-     metaphlan left.fq,right.fq --bowtie2db $METAPHLAN_DB --samout $sam_out --bowtie2out $bowtie_out --nproc ${task.cpus} -o $metaphlan_out --input_type fastq
+     metaphlan left.fq,right.fq --bowtie2db $METAPHLAN_DB -x mpa_v30_CHOCOPhlAn_201901 --samout $sam_out --bowtie2out $bowtie_out --nproc ${task.cpus} -o $metaphlan_out --input_type fastq
      rm *.fq
 
    """
