@@ -347,7 +347,7 @@ process runMetaphlan {
 
    output:
    file(metaphlan_out) into outputMetaphlan
-   set val(sampleID),file(sam_out) into outputMetaphlanBowtie
+   set val(sampleID),file(sam_out) into (outputMetaphlanBowtie, MetaphlanSam)
    file "v_metaphlan.txt" into version_metaphlan
 
    script:
@@ -363,6 +363,48 @@ process runMetaphlan {
      rm *.fq
 
    """
+
+}
+
+process runHumann3 {
+
+	input:
+	set val(sampleID),file(sam_compressed) from MetaphlanSam
+
+	output:
+	file(result) into HumannOut
+
+	script:
+	
+	result = sampleID + "_humann3"
+	sam = sam_compressed.getbaseName()
+
+	"""
+		bzip2 -k -d $sam_compressed
+		humann --input $sam --input-format sam --output $result
+	"""
+}
+
+process Humann3Genefams {
+
+	input:
+	set file(results) from HumannOut.collect()
+
+	output:
+
+	script:
+
+	gene_families = "humann3_gene_families.tsv"
+	gene_families_normalized = "humann3_gene_families-cpm.tsv"
+
+	"""
+		mkdir -p intermediate
+		cp *_humann3/* intermediate
+
+		humann_join_tables -i intermediate -o $gene_families --file_name genefamilies
+		humann_renorm_table  -i $gene_families -o $gene_families_normalized --units cpm
+
+	"""
 
 }
 

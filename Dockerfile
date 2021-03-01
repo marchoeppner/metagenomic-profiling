@@ -3,5 +3,6 @@ LABEL authors="Marc Hoeppner" \
       description="Docker image containing all requirements for IKMB metagenomics pipeline"
 
 COPY environment.yml /
+RUN conda config --add channels biobakery
 RUN conda env create -f /environment.yml && conda clean -a
-ENV PATH /opt/conda/envs/metagenomics-profiling-1.2/bin:$PATH
+ENV PATH /opt/conda/envs/metagenomics-profiling-1.3/bin:$PATH

@@ -1,13 +1,14 @@
 # You can use this file to create a conda environment for this pipeline:
 #   conda env create -f environment.yml
-name: metagenomics-profiling-1.2
+name: metagenomics-profiling-1.3
 channels:
  - defaults
+ - biobakery
  - conda-forge
  - bioconda
 dependencies:
  - matplotlib=2.1.1
- - metaphlan2
+ - biobakery::humann
  - fastp=0.20.0
  - bwa=0.7.17
  - samtools=1.9
