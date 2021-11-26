@@ -100,21 +100,6 @@ Channel.fromFilePairs(params.reads , flat: true )
 	.ifEmpty {exit 1, "Could not find the specified input reads $params.reads"}
 	.into { Reads ; inputFastQC; inputStaging }
 
-process prepMetaphlan {
-
-	executor 'local'
-
-	script:
-
-	"""
-		cd $METAPHLAN_DB
-		wget https://www.dropbox.com/sh/7qze7m7g9fe2xjg/AAAyoJpOgcjop41VIHAGWIVLa/mpa_latest?dl=1
-		mv mpa_latest?dl=1 mpa_latest
-	
-	"""
-
-}
-
 process runFastQC {
 
 	label 'fastqc'
@@ -363,48 +348,6 @@ process runMetaphlan {
      rm *.fq
 
    """
-
-}
-
-process runHumann3 {
-
-	input:
-	set val(sampleID),file(sam_compressed) from MetaphlanSam
-
-	output:
-	file(result) into HumannOut
-
-	script:
-	
-	result = sampleID + "_humann3"
-	sam = sam_compressed.getbaseName()
-
-	"""
-		bzip2 -k -d $sam_compressed
-		humann --input $sam --input-format sam --output $result
-	"""
-}
-
-process Humann3Genefams {
-
-	input:
-	set file(results) from HumannOut.collect()
-
-	output:
-
-	script:
-
-	gene_families = "humann3_gene_families.tsv"
-	gene_families_normalized = "humann3_gene_families-cpm.tsv"
-
-	"""
-		mkdir -p intermediate
-		cp *_humann3/* intermediate
-
-		humann_join_tables -i intermediate -o $gene_families --file_name genefamilies
-		humann_renorm_table  -i $gene_families -o $gene_families_normalized --units cpm
-
-	"""
 
 }
 
